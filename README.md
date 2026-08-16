@@ -1,4 +1,4 @@
-# Personal Assistant
+# Sara
 
 A read-only assistant over Gmail, Google Calendar and the weather. Ask it what is waiting
 on a reply, what your week looks like, or whether it will rain in Pune - it answers by
