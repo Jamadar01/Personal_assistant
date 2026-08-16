@@ -1,0 +1,26 @@
+# The build only needs requirements.txt, the two .py files, and web/. Everything else
+# is either rebuilt inside the image or must never enter it.
+
+# Secrets. Nothing here is COPYed, but a build context is not a private place - anything
+# in it is one careless `COPY . .` away from being in a layer forever.
+.env
+token.json
+*.pem
+
+# Rebuilt in the image: pip installs from requirements.txt, npm ci from package-lock.json,
+# and Vite writes dist/ in the web stage. Copying the host's copies in would be slower and
+# would carry Windows-built artifacts into a Linux image.
+venv/
+web/node_modules/
+web/dist/
+__pycache__/
+*.pyc
+
+# Not code.
+.git/
+.gitignore
+.claude/
+README.md
+ROADMAP.md
+check_auth.py
+check_tools.py

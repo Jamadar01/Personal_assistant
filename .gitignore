@@ -1,2 +1,6 @@
 .env
 token.json
+__pycache__/
+venv/
+web/node_modules/
+web/dist/

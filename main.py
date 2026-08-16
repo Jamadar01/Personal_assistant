@@ -36,14 +36,27 @@
 
 import asyncio
 import os
+import sys
+
 import httpx
+from contextlib import AsyncExitStack
 from langchain_mcp_adapters.client import MultiServerMCPClient
+from langchain_mcp_adapters.tools import load_mcp_tools
 from langchain_openai import ChatOpenAI
 from langchain.tools import tool
 from langchain.agents import create_agent
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# The Windows console is cp1252, which cannot encode the degree signs, em dashes and
+# arrows the model likes to use - without this they come out as "?" or raise.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
+# Holds the live MCP sessions open. Kept at module level so they are not garbage
+# collected - closing them would shut down the npx servers mid-conversation.
+_SESSIONS = None
 
 
 # Open-Meteo needs no API key and covers the whole world. The published weather MCP
@@ -133,7 +146,12 @@ async def weather(location: str, days: int = 1) -> str:
     return "\n".join(lines)
 
 
-async def Email_agent():
+async def build_agent():
+    """Start the MCP servers and return (agent, system_prompt).
+
+    Both the terminal loop below and app.py call this, so the server list, the read-only
+    filter and the prompt are defined once instead of once per front end.
+    """
     # token = get_token()
     # The gmail server auto-discovers its OAuth client at ~/.gmail-mcp/gcp-oauth.keys.json.
     # The calendar server needs the same file passed explicitly, so reuse it rather than
@@ -169,7 +187,16 @@ async def Email_agent():
         "list-calendars", "list-events", "search-events", "get-event",
         "get-freebusy", "list-colors", "get-current-time",
     }
-    mcp_tools = [t for t in await client.get_tools() if t.name in read_only]
+    # client.get_tools() opens a fresh session per tool call, which means npx respawns
+    # both servers every single time the agent looks something up. Holding one session
+    # per server instead keeps two node processes up for the life of the program.
+    global _SESSIONS
+    _SESSIONS = AsyncExitStack()
+    mcp_tools = []
+    for name in ("gmail", "calendar"):
+        session = await _SESSIONS.enter_async_context(client.session(name))
+        mcp_tools += await load_mcp_tools(session, server_name=name)
+    mcp_tools = [t for t in mcp_tools if t.name in read_only]
 
     missing = read_only - {t.name for t in mcp_tools}
     if missing:
@@ -242,6 +269,12 @@ my meeting" with several that day — ask which one. Do not pick the most likely
         model,
         tools
     )
+    return agent, system_prompt
+
+
+async def Email_agent():
+    """Terminal chat loop."""
+    agent, system_prompt = await build_agent()
 
     # One list for the whole session. Each turn appends to it and the full history goes
     # back to the model, so "what about next week?" knows what last week referred to.
