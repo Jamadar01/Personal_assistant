@@ -1,0 +1,46 @@
+# Render Blueprint. Deploy with: New > Blueprint, point it at this repo.
+#
+# Everything about the build is already in the Dockerfile - this file only says how to
+# run it and which secrets it needs. Committing it means the service can be recreated
+# from scratch without clicking through the dashboard from memory.
+
+services:
+  - type: web
+    name: personal-assistant
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+
+    # Free is one instance, always. That happens to be a hard requirement here, not a
+    # limitation: CONVERSATIONS is a process-local dict, the MCP servers are stdio
+    # children of this specific process, and TURN_LOCK only serializes within it. Two
+    # instances would answer with no memory of each other's turns and interleave their
+    # stdio traffic. If this ever moves to a paid plan, leave the instance count at 1.
+    plan: free
+
+    # Closest region to Pune. Every tool call already round-trips to Google and OpenAI,
+    # so this only saves the browser-to-Render leg - but it is free to pick correctly.
+    region: singapore
+
+    # Render redeploys on push to this branch.
+    branch: v1.1
+    autoDeploy: true
+
+    # Returns 200 as soon as uvicorn is listening, which is BEFORE the MCP servers have
+    # finished starting - see the note in README under Deploying. Good enough to catch a
+    # container that never boots, which is what a health check is actually for.
+    healthCheckPath: /api/health
+
+    envVars:
+      # sync: false means "ask me in the dashboard, do not read a value from this file".
+      # These are live Google tokens and an API key - none of them belong in the repo.
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: APP_PASSWORD
+        sync: false
+      - key: GOOGLE_OAUTH_KEYS
+        sync: false
+      - key: GMAIL_CREDENTIALS
+        sync: false
+      - key: CALENDAR_TOKENS
+        sync: false
