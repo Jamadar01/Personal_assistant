@@ -92,7 +92,7 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="Personal Assistant", lifespan=lifespan)
+app = FastAPI(title="Sara", lifespan=lifespan)
 
 
 @app.middleware("http")
@@ -123,7 +123,7 @@ async def require_password(request: Request, call_next):
         if not secrets.compare_digest(supplied, APP_PASSWORD):
             return Response(
                 status_code=401,
-                headers={"WWW-Authenticate": 'Basic realm="Personal Assistant"'},
+                headers={"WWW-Authenticate": 'Basic realm="Sara"'},
             )
 
     return await call_next(request)
